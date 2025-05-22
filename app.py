@@ -1,5 +1,5 @@
 from flask import Flask, jsonify
-from countdoom import Countdown
+from countdoom.client import CountdoomClient
 
 app = Flask(__name__)
 
@@ -10,7 +10,9 @@ def home():
 @app.route("/api/doomsday")
 def get_doomsday():
     try:
-        countdown = Countdown()
+        client = CountdoomClient()
+countdown = client.get_clock()
+
         return jsonify({
             "sentence": countdown.sentence,
             "seconds": countdown.seconds,
