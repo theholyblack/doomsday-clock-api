@@ -9,84 +9,45 @@ app = Flask(__name__)
 
 @app.route("/")
 def home():
-    return "Midnight Array API (Doomsday + DEFCON)"
+    return "Midnight Array API: /api/status for combined data"
 
 @app.route("/api/status")
 def get_combined_status():
-    try:
-        # === DOOMSDAY CLOCK ===
-        doomsday_data = {}
-        result = subprocess.run(['countdoom', '--format', 'json'], capture_output=True, text=True, check=True)
-        doomsday_data = json.loads(result.stdout)
-
-        # === DEFCON LEVEL ===
-        url = "https://www.defconlevel.com/"
-        headers = {
-            "User-Agent": "Mozilla/5.0"
-        }
-
-        response = requests.get(url, headers=headers)
-        soup = BeautifulSoup(response.text, "html.parser")
-
-        level_text = soup.find("h2", string=lambda t: t and "defcon" in t.lower())
-        if not level_text:
-            para = soup.find("p", string=lambda t: t and "defcon" in t.lower())
-            if para:
-                defcon = extract_defcon_from_text(para.text)
-            else:
-                defcon = None
-        else:
-            defcon = extract_defcon_from_text(level_text.text)
-
-        return jsonify({
-            "doomsday": doomsday_data,
-            "defcon": defcon
-        })
-
-    except subprocess.CalledProcessError as e:
-        return jsonify({"error": "Failed to get countdown", "details": e.stderr}), 500
-    except Exception as e:
-        return jsonify({"error": "Unexpected error", "details": str(e)}), 500
+    return jsonify({
+        "doomsday": get_doomsday_data(),
+        "defcon": get_defcon_data()
+    })
 
 @app.route("/api/doomsday")
-def get_doomsday():
-    try:
-        result = subprocess.run(['countdoom', '--format', 'json'], capture_output=True, text=True, check=True)
-        data = json.loads(result.stdout)
-        return jsonify(data)
-    except subprocess.CalledProcessError as e:
-        return jsonify({"error": "Failed to get countdown", "details": e.stderr}), 500
-    except Exception as e:
-        return jsonify({"error": "Unexpected error", "details": str(e)}), 500
+def api_doomsday():
+    return jsonify(get_doomsday_data())
 
 @app.route("/api/defcon")
-def get_defcon_level():
+def api_defcon():
+    return jsonify({"defcon": get_defcon_data()})
+
+# --- Helpers ---
+
+def get_doomsday_data():
+    try:
+        result = subprocess.run(['countdoom', '--format', 'json'], capture_output=True, text=True, check=True)
+        return json.loads(result.stdout)
+    except Exception as e:
+        return {"error": "Failed to get doomsday clock", "details": str(e)}
+
+def get_defcon_data():
     try:
         url = "https://www.defconlevel.com/"
-        headers = {
-            "User-Agent": "Mozilla/5.0"
-        }
-
+        headers = { "User-Agent": "Mozilla/5.0" }
         response = requests.get(url, headers=headers)
         soup = BeautifulSoup(response.text, "html.parser")
-
-        level_text = soup.find("h2", string=lambda t: t and "defcon" in t.lower())
-        if not level_text:
-            para = soup.find("p", string=lambda t: t and "defcon" in t.lower())
-            if para:
-                level = extract_defcon_from_text(para.text)
-            else:
-                return jsonify({"error": "Could not find DEFCON text"}), 500
-        else:
-            level = extract_defcon_from_text(level_text.text)
-
-        return jsonify({"defcon": level})
+        text = soup.get_text(separator=" ", strip=True)
+        return extract_defcon_from_text(text)
     except Exception as e:
-        return jsonify({"error": "Failed to scrape DEFCON level", "details": str(e)}), 500
+        return None  # or return a default value like 5
 
 def extract_defcon_from_text(text):
     match = re.search(r"DEFCON\s*([1-5])", text.upper())
     if match:
         return int(match.group(1))
     return None
-
